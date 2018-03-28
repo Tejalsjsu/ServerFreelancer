@@ -4,14 +4,21 @@ var favicon = require('serve-favicon');
 var logger = require('morgan');
 var cookieParser = require('cookie-parser');
 var bodyParser = require('body-parser');
-
+var passport = require('passport');
+var mongo = require('mongodb');
 
 var index = require('./routes/index');
 var users = require('./routes/users');
+var mongoCalls = require('./routes/mongoCalls');
+var producerAPI = require('./routes/kafka/kafkaProducer');
+
+var mongoSessionURL = "mongodb://localhost:27017/freelancer";
 
 //cors resolution
 var cors = require('cors');
 var session = require('express-session');
+var expressSessions = require('express-session');
+var mongoStore = require('connect-mongo')(expressSessions);
 
 
 var app = express();
@@ -42,7 +49,20 @@ app.use(session({
     secret: 'cmpe273_test_string',
     duration: 30 * 60 * 1000,    //setting the time for active session
     activeDuration: 5 * 60 * 1000
-})); // setting time for the session to be active when the window is open // 5 minutes set currently
+})); // setting time for the session to be active when the window is open // 5 minutes set
+
+app.use(expressSessions({
+    secret: "CMPE273_passport",
+    resave: false,
+    //Forces the session to be saved back to the session store, even if the session was never modified during the request
+    saveUninitialized: false, //force to save uninitialized session to db.
+    //A session is uninitialized when it is new but not modified.
+    duration: 30 * 60 * 1000,
+    activeDuration: 5 * 6 * 1000,
+    store: new mongoStore({
+            url: mongoSessionURL
+    })
+}));
 
 app.listen(3001);
 console.log('Running on port 3001');
@@ -50,6 +70,12 @@ console.log('Running on port 3001');
 
 app.use('/', index);
 app.use('/users', users);
+app.use('/mongoCalls', mongoCalls);
+app.use('/kafka/kafkaProducer', producerAPI);
+
+
+app.use(passport.initialize());
+app.use(passport.session());
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
@@ -69,5 +95,11 @@ app.use(function(err, req, res, next) {
   res.render('error');
 });
 
+
+//make our db accessible to the req object
+app.use(function (req, res, next) {
+    req.db = db;
+    next();
+});
 
 module.exports = app;
