@@ -5,6 +5,8 @@ var mysqlparams = require('./mysqlparams');
 var bcrypt = require('bcrypt');
 var salt = bcrypt.genSaltSync(10);
 
+var kafka = require('./kafka/client');
+
 //var jwt = require('jsonwebtoken');
 var sessionName = null;
 
@@ -305,7 +307,7 @@ router.post('/getAllProjects', function(req, res, next){
         if(req.session.userId!= null ) {
 
             var getProject ="\n" +
-                "select idtblProject, employerId, ProjectName, projectDescription, budgetRange," +
+                "select idtblProject, employerId, ProjectName, projectDescription, budgetRange,postDate, " +
                 "projectpay, DATE_ADD(postDate, INTERVAL 10 DAY) as 'EndDate' , skills, Avg(bidAmount) as 'Bids', count(bidId) as 'count'" +
                 " from tblProject LEFT JOIN tblBids ON tblProject.idtblProject = tblBids.projectId group by tblProject.idtblProject"
 
@@ -447,6 +449,38 @@ router.post('/getBidInfo', function(req, res, next){
         res.json({message: "Login failed", status: '402'});
     }
 
+});
+
+router.post('/postProjectKafka', function (req, res, next){
+    console.log("In Kafka projects");
+    var reqName = req.body.name;
+    var reqDescription = req.body.description;
+    var reqSkills =  req.body.skills;
+    var reqPay = req.body.pay;
+    var reqBudget = req.body.budget;
+    var reqStatus = "Not Started";
+    //var reqEmployer = req.session.userId;
+    var reqEmployer = parseInt(sessionName);
+    var reqDate = Date.now();
+    console.log("user id is ", sessionName);
+
+    kafka.make_request('Projecttopic',{"projectName":reqName,"projectDesc":reqDescription}, function(err,results) {
+        console.log("In make request");
+        console.log(results);
+        if(err){
+            done(err,{});
+        }
+        else
+        {
+            if(results.code == 200){
+                done(null,{username:"bhavan@b.com",password:"a"});
+            }
+            else {
+                done(null,false);
+            }
+        }
+    }
+    )
 });
 
 module.exports = router;
