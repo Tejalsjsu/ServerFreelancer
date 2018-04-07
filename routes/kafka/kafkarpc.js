@@ -1,8 +1,7 @@
 var crypto = require('crypto');
 var conn = require('./Connection');
-var insert = require('./InsertInMongo');
 
-var TIMEOUT=8000; //time to wait for response in ms
+var TIMEOUT=8000; //time to wait for response in msecs
 var self;
 
 exports = module.exports =  KafkaRPC;
@@ -10,8 +9,8 @@ exports = module.exports =  KafkaRPC;
 function KafkaRPC(){
     self = this;
     this.connection = conn;
-    this.requests = {}; //hash to store request in wait for response
-    this.response_queue = false; //placeholder for the future queue
+    this.requests = {}; //hash to store request in wait  for the response/responses
+    this.response_queue = false; //placeholder for future queue
     this.producer = this.connection.getProducer();
 }
 
@@ -42,23 +41,23 @@ KafkaRPC.prototype.makeRequest = function(topic_name, content, callback){
 
     //make sure we have a response topic
     self.setupResponseQueue(self.producer,topic_name,function(){
-        //console.log('in setupResponseQueue 1');
+        console.log('in response');
         //put the request on a topic
 
         var payloads = [
             { topic: topic_name, messages: JSON.stringify({
                     correlationId:correlationId,
-                    replyTo:'projects',
+                    replyTo:'response_topic',
                     data:content}),
                 partition:0}
         ];
-        // console.log('in response1');
-        // console.log("Is producer ready : " +self.producer.ready);
+        console.log('in response1');
+        console.log(self.producer.ready);
         self.producer.send(payloads, function(err, data){
-            console.log('after payloads send 2');
+            console.log('in response2');
             if(err)
                 console.log(err);
-           // console.log(data);
+            console.log(data);
         });
     });
 };
@@ -72,27 +71,23 @@ KafkaRPC.prototype.setupResponseQueue = function(producer,topic_name, next){
 
     self = this;
 
-    //subscribe to messages and read messages
-    var consumer = self.connection.getConsumer('project');
+    //subscribe to messages
+    var consumer = self.connection.getConsumer('response_topic');
     consumer.on('message', function (message) {
         console.log('msg received');
         var data = JSON.parse(message.value);
-        //console.log(data);
         //get the correlationId
         var correlationId = data.correlationId;
-       // console.log("Correction id from data " +correlationId)
-        //console.log("Correaltion in self " +self.requests);
         //is it a response to a pending request
         if(correlationId in self.requests){
-            console.log("In if");
             //retrieve the request entry
             var entry = self.requests[correlationId];
-            //make sure we don't timeout by clearing it
+            //make sure we don't timeout clearing
             clearTimeout(entry.timeout);
             //delete the entry from hash
             delete self.requests[correlationId];
-
             //callback, no err
+            console.log("Data " +data);
             entry.callback(null, data.data);
         }
     });
