@@ -7,9 +7,12 @@ var passport = require('passport')
 const bcrypt = require('bcrypt')
 var salt = bcrypt.genSaltSync(10);
 const mongoose = require('mongoose');
-var User = require('./Schema');
+var {User} = require('./Schema');
 var MongoClient = mongodb.MongoClient;
 var url = "mongodb://localhost:27017/";
+var ObjectId = require('mongodb').ObjectID;
+var BidSchemas = require('../models/bid');
+var ProjectSchema = require('../models/Project');
 
 
 router.post('/signup_mongodb', function(req, res) {
@@ -73,8 +76,9 @@ passport.deserializeUser(function(id, done) {
                  console.log(user);
                  if (!user) {
                      console.log("In !User error " +user.username);
-                     return done(null, false, { message: 'Incorrect password.', isCorrect : 'false' });
+                     return done(null, false, { message: 'Incorrect username.', isCorrect : 'false' });
                  }else{
+                     console.log("COrrect username check pass " +user.password);
                      if(bcrypt.compareSync(password, user.password)){
                          console.log("In pass check" +user.password);
                          return done(null, {"email": user.email,"userId" : user._id, isCorrect: 'true'})
@@ -178,11 +182,166 @@ router.post('/getProjectsByUser', function(req, res, next) {
             }else if(result.length){
                 res.json({message: "fetch data successful",status:'201', details: result});
             }else{
-                console.log('No documents found');
+                console.log('No documents');
             }
         });
     })
 
+});
+
+router.post('/getProjectDetails', function(req, res, next){
+    try{
+        console.log("In fetch function");
+        var reqProjectId = req.body.projectId;
+        console.log(reqProjectId);
+        if(req.session.userId!= null ) {
+            MongoClient.connect(url, function (err,db) {
+                if (err) {
+                    console.log(err.toString() + " " + url);
+                }
+                else {
+                    console.log("Connection established");
+                    var dbo = db.db("freelancer");
+                    dbo.collection("projects").find({'_id': ObjectId(reqProjectId)}).toArray(function (err, result) {
+                        if (err) {
+                            console.log("Error in getting result");
+                            res.json({message: "Failed to fetch data", status: '401'});
+                        } else {
+                            console.log(result);
+                            console.log("Result " +result.length);
+                            if (result.length) {
+                                res.json({message: "fetch data successful", status: '201', details: result});
+                            } else {
+                                console.log('No documents');
+                                res.json({message: "Failed to fetch data", status: '401'});
+                            }
+                        }
+                    });
+                }
+            })
+        }else{
+            console.log("No UserID found");
+            res.json({message: "Failed to fetch data", status: '401'});
+        }
+    }catch(exception){
+        console.log(exception);
+    }
+});
+
+router.post('/postBid', function (req, res, next) {
+    try{
+        var reqProjectId = req.body.projectId;
+        var reqFreelancer = req.session.userId
+        var reqAmount = (req.body.bidamount!= null ? parseInt(req.body.bidamount): req.body.bidamount);
+        var reqDuration = (req.body.duration!= null ? parseInt(req.body.duration): req.body.duration);
+        var bidDate = new Date(Date.now()).toISOString();
+
+        MongoClient.connect(url, function (err,db) {
+            if(err){
+                console.log(err.toString()+ " " +url);
+            }
+            else{
+                console.log("Connection established");
+            }
+            var dbo = db.db("freelancer");
+            //var myobj = { projectId: reqProjectId, freelancerId: reqFreelancer, bidAmount: reqAmount, completionDays: reqDuration, bidDate: bidDate};
+            var myobj = { freelancerId: reqFreelancer, bidAmount: reqAmount, completionDays: reqDuration, bidDate: bidDate};
+            //var collection = db.collection("login");
+            //dbo.collection("bids").insertOne(myobj, function(err, result){
+            //$push created an array of bidsinfo
+            dbo.collection("projects").update(
+                {_id: ObjectId(reqProjectId)},
+                {$push: {bidsinfo:
+                            {freelancerId: reqFreelancer, bidAmount: reqAmount, completionDays: reqDuration, bidDate: bidDate}}},
+                  function(err, result){
+                    if(err){
+                    console.log("Error in getting result" +err);
+                    res.json({'status': '401'});
+                    }else {
+                     dbo.collection("projects").update(
+                         {_id : ObjectId(reqProjectId)},
+                         {$set: { status: "Assign Pending" }},
+                     {upsert: true}
+                 );
+                    res.status(201).json({'status': '201','userlist': result});
+                }
+            });
+        })
+    }catch (error){
+        console.log("Could not insert in mongo Bid" +error.toString())
+    }
+});
+
+
+router.post('/getBidsAgg', async (req, res) => {
+     BidSchemas.find({}, function(err, bidSchemas) {
+         bidSchemas
+             .group({
+                 _id:'$projectId',
+                 average :{ $avg: '$bidAmount'}
+             })
+         })
+         console.log(bidSchemas);
+         res.send(bidSchemas);
+ });
+
+// to find average
+router.post('/getAllProjectsWithBids', function(req, res, next) {
+    MongoClient.connect(url, function (err,db) {
+        if(err){
+            console.log(err.toString()+ " " +url);
+        }
+        else{
+            console.log("Connection established");
+        }
+        var dbo = db.db("freelancer");
+        //var collection = db.collection("login");
+        dbo.collection("projects").aggregate(
+            [
+                {
+                    "$unwind" : {
+                        "path" : "$bidsinfo"
+                    }
+                },
+                {
+                    "$group" : {
+                        "_id" : {
+                            "projectId": "$_id",
+                            "projectName" : "$projectName",
+                            "projectDescription" : "$projectDescription",
+                            "budgetRange" : "$budgetRange",
+                            "skills" : "$skills",
+                            "projectpay" : "$projectpay",
+                            "status" : "$status",
+                            "postProjectDate" : "$postProjectDate"
+                        },
+                        "average" : {
+                            "$avg" : "$bidsinfo.bidAmount"
+                        },
+                        "averagecompletionDays" : {
+                            "$avg" : "$bidsinfo.completionDays"
+                        },
+                        "count" : {
+                            "$sum" : 1.0
+                        }
+                    }
+                }
+            ],
+            {
+                "allowDiskUse" : false
+            }
+        ).toArray(function(err,result){
+            if(err){
+                console.log("Error in getting result" +err);
+            }else if(result.length){
+                console.log("fetched successfully from db " +result[0].projectName);
+                res.status(201).json({message: "Project not found. Try again!", status: '201', details: result});
+            }else{
+                res.json({message: "fetch data successful",status:'201', details: result});
+                console.log('No documents found');
+            }
+        });
+    })
 });
 
 module.exports = router;
