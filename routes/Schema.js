@@ -1,19 +1,21 @@
 // app/models/user.js
 // load the things we need
-var mongoose = require('mongoose');
-var bcrypt   = require('bcrypt');
+let mongoose = require('mongoose');
+let bcrypt   = require('bcrypt');
+const { Schema } = mongoose;
 
 mongoose.connect('mongodb://localhost:27017/freelancer');
-// define the schema for our user model
-var UserSchema = mongoose.Schema({
+// define schema for our user model
+let User = Schema({
 
     username : { type:String, index : true },
     email     : {type:String},
     password  : {type:String}
 });
+mongoose.model('login', User);
 
 // create the model for users and expose it to our app
-var User = module.exports = mongoose.model('login', UserSchema);
+//let User = module.exports = mongoose.model('login', User);
 // methods ======================
 
 module.exports.comparePassword = function (candiadtePass, hash, callback) {
@@ -26,7 +28,7 @@ module.exports.comparePassword = function (candiadtePass, hash, callback) {
 
 module.exports.getUserNameByUserName = function (username, callback) {
     console.log("In get username");
-    var query = {username: username}
+    let query = {username: username}
     User.findOne(query, callback);
 }
 
