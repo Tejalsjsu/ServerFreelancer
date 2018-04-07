@@ -4,7 +4,7 @@ var mysql = require('./mysql');
 var mysqlparams = require('./mysqlparams');
 var bcrypt = require('bcrypt');
 var salt = bcrypt.genSaltSync(10);
-
+var mongoURL = "mongodb://localhost:27017/freelancer";
 var kafka = require('./kafka/client');
 
 //var jwt = require('jsonwebtoken');
@@ -203,8 +203,8 @@ router.post('/postproject', function (req, res, next) {
 router.post('/getProjects', function(req, res, next){
     console.log("In fetch projects data for dashboard");
     if(req.session.userId!= null ) {
-        var reqUserName = req.body.usename;
-
+        //var reqUserName = req.body.usename;
+        var reqUserName = 4;
         var getProject = "select idtblProject, employerId, ProjectName, projectDescription, budgetRange," +
             "projectpay, postDate as EndDate, skills, Avg(bidAmount) as Bids, count(bidId) as count" +
             " from tblProject" +
@@ -451,36 +451,5 @@ router.post('/getBidInfo', function(req, res, next){
 
 });
 
-router.post('/postProjectKafka', function (req, res, next){
-    console.log("In Kafka projects");
-    var reqName = req.body.name;
-    var reqDescription = req.body.description;
-    var reqSkills =  req.body.skills;
-    var reqPay = req.body.pay;
-    var reqBudget = req.body.budget;
-    var reqStatus = "Not Started";
-    //var reqEmployer = req.session.userId;
-    var reqEmployer = parseInt(sessionName);
-    var reqDate = Date.now();
-    console.log("user id is ", sessionName);
-
-    kafka.make_request('Projecttopic',{"projectName":reqName,"projectDesc":reqDescription}, function(err,results) {
-        console.log("In make request");
-        console.log(results);
-        if(err){
-            done(err,{});
-        }
-        else
-        {
-            if(results.code == 200){
-                done(null,{username:"bhavan@b.com",password:"a"});
-            }
-            else {
-                done(null,false);
-            }
-        }
-    }
-    )
-});
 
 module.exports = router;
