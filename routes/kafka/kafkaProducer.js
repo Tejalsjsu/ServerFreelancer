@@ -139,4 +139,32 @@ router.post('/withdrawMoney', function (req, res, next) {
     }
 });
 
+
+router.post('/hireFreelancer', function (req, res, next) {
+
+    let reqProjectId = req.body.projectId;
+    let reqProjectName = req.body.projectName;
+    let reqUserId = req.body.userId;
+    let bidApproved = req.body.amount;
+
+    kafka.make_request(kafka_topic.HIRE,{"projectId": reqProjectId, "userId":reqUserId, "topic":kafka_topic.HIRE,
+        "ProjectName": reqProjectName, "status": "Hired", "amount": bidApproved}, function(err,results){
+        console.log(results);
+        if(err){
+            done(err,{});
+            res.status(401).json({message: "Could not hire. Try again!", status: '401'});
+        }
+        else
+        {
+            if(results.status === 201){
+                res.status(201).json({message: "Hire successful", status: '201'});
+            }
+            else {
+                console.log("Error in post "+results);
+                res.status(401).json({message: "Could not hire. Try again!", status: '401'});
+            }
+        }
+    });
+});
+
 module.exports = router;
