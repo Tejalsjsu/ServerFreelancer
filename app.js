@@ -20,7 +20,6 @@ var session = require('express-session');
 var expressSessions = require('express-session');
 var mongoStore = require('connect-mongo')(expressSessions);
 
-
 var app = express();
 
 // view engine setup
@@ -41,17 +40,18 @@ app.use(cors(
         credentials: true,
     }
 ));
-
-app.use(session({
-    cookieName: 'session',
-    resave: false,
-    saveUninitialized: true,
-    secret: 'cmpe273_test_string',
-    duration: 30 * 60 * 1000,    //setting the time for active session
-    activeDuration: 5 * 60 * 1000
-})); // setting time for the session to be active when the window is open // 5 minutes set
+//
+// app.use(session({
+//     cookieName: 'session',
+//     resave: false,
+//     saveUninitialized: true,
+//     secret: 'cmpe273_test_string',
+//     duration: 30 * 60 * 1000,    //setting the time for active session
+//     activeDuration: 5 * 60 * 1000
+// })); // setting time for the session to be active when the window is open // 5 minutes set
 
 app.use(expressSessions({
+    cookieName: 'session',
     secret: "CMPE273_passport",
     resave: false,
     //Forces the session to be saved back to the session store, even if the session was never modified during the request
@@ -96,7 +96,7 @@ app.use(function(err, req, res, next) {
 });
 
 
-//make our db accessible to the req object
+//make our db accessible to the request object
 app.use(function (req, res, next) {
     req.db = db;
     next();
