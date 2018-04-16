@@ -9,7 +9,7 @@ var salt = bcrypt.genSaltSync(10);
 const mongoose = require('mongoose');
 var {User} = require('./Schema');
 var MongoClient = mongodb.MongoClient;
-var url = "mongodb://localhost:27017/";
+let url = "mongodb://localhost:27017/";
 var ObjectId = require('mongodb').ObjectID;
 var BidSchemas = require('../models/bid');
 var ProjectSchema = require('../models/Project');
@@ -38,11 +38,9 @@ router.post('/signup_mongodb', function(req, res) {
         dbo.collection("login").insertOne(myobj, function(err, result){
             if(err){
                 console.log("Error in getting result");
-            }else if(result.length){
-                res.status(201).json({'status': '201','userlist': result});
+                res.json({'status': '401', statusCode: 200});
             }else{
-                console.log('No documents found');
-                res.json({'status': '401'});
+                res.status(201).json({'status': '201','userlist': result, statusCode: 200});
             }
         });
     })
@@ -63,15 +61,13 @@ passport.deserializeUser(function(id, done) {
     });
 });
 
-
 passport.use(new LocalStrategy(
     function(username, password, done) {
         console.log("username " +username+ " Pass " +password);
         MongoClient.connect(url, function (err,db) {
             if(err){
                 console.log(err.toString()+ " " +url);
-            }
-            else{
+            } else{
                 console.log("Connection established");
             }
             var dbo = db.db("freelancer");
@@ -82,7 +78,7 @@ passport.use(new LocalStrategy(
                     console.log("In !User error " +user.username);
                     return done(null, false, { message: 'Incorrect username.', isCorrect : 'false' });
                 }else{
-                    console.log("COrrect username check pass " +user.password);
+                    console.log("Correct username check pass " +user.password);
                     if(bcrypt.compareSync(password, user.password)){
                         console.log("In pass check" +user.password);
                         return done(null, {"email": user.email,"userId" : user._id, isCorrect: 'true'})
@@ -135,10 +131,10 @@ router.post('/logout', function (req,res, next){
         console.log(req.session.userId);
         req.session.destroy();
         console.log('Session destroyed');
-        res.status(201).json({message: "Login failed", status: '201'});
+        res.status(201).json({message: "Login failed", status: '201', statusCode: 200});
     }catch(err){
         console.log("in error" +err);
-        res.status(201).json({message: "Login failed", status: '201'});
+        res.status(401).json({message: "Login failed", status: '401'});
     }
 
 });
@@ -156,35 +152,56 @@ router.post('/postproject', function (req, res, next) {
     var reqEmployer = req.session.userId
     var reqDate = Date.now();
     console.log("session is " +reqEmployer);
-
-
-
-
-    var postProject = "insert into tblproject" +
-        "(`employerId`,`projectName`, `projectDescription`,`budgetRange`,`status`,`projectpay`) values " +
-        "("+reqEmployer+",'"+reqName+"','" +reqDescription+"','" +reqBudget+"','" +reqStatus+"','" +reqPay+"')";
-
-    console.log("Query is:"+postProject);
-
-    mysql.fetchData(function(err,results){
+    MongoClient.connect(url, function (err,db) {
         if(err){
-            throw err;
+            console.log(err.toString()+ " " +url);
         }
-        else
-        {
-            if(results.affectedRows > 0){
-                console.log("valid Signup");
-                res.status(201).json({message: "Project posted successful", status: '201'});
-            }
-            else {
-                console.log("Invalid Sign up");
-                res.status(401).json({message: "Project not posted. Try again!", status: '401'});
-            }
+        else{
+            console.log("Connection established");
         }
-    },postProject);
+        let dbo = db.db("freelancer");
+
+        dbo.collection("projects").insertOne({"employerId": req.session.userId, "projectName":req.body.name,
+            "projectDescription": reqDescription,"budgetRange": reqBudget, "skills": reqSkills,
+            "projectpay": reqPay, "status": reqStatus, "postProjectDate": reqDate, "Bids": 0}, function(err, resultDB){
+            if (!err) {
+                console.log("No error" +resultDB);
+                res.message =  "Project posted successful";
+                res.status= 201;
+            } else {
+                console.log("Error in posting result");
+                res.status = 401;
+                res.message =  "Project could not be posted";
+            }
+        });
+    });
 });
 
 router.post('/getProjectsByUser', function(req, res, next) {
+    MongoClient.connect(url, function (err,db) {
+        if(err){
+            console.log(err.toString()+ " " +url);
+        }
+        else{
+            console.log("Connection established");
+        }
+        var dbo = db.db("freelancer");
+        //var collection = db.collection("login");
+        dbo.collection("projects").find({ }).toArray(function(err,result){
+            if(err){
+                console.log("Error in getting result");
+            }else if(result.length){
+                res.status(201).json({message: "fetch data successful",status:'201', details: result});
+            }else{
+                console.log('No documents');
+            }
+        });
+    })
+
+});
+
+router.post('/getProjectsByUserWithStatus', function(req, res, next) {
+
     MongoClient.connect(url, function (err,db) {
         if(err){
             console.log(err.toString()+ " " +url);
@@ -207,6 +224,7 @@ router.post('/getProjectsByUser', function(req, res, next) {
 
 });
 
+
 router.post('/getProjectDetails', function(req, res, next){
     try{
         console.log("In fetch function");
@@ -228,10 +246,10 @@ router.post('/getProjectDetails', function(req, res, next){
                             console.log(result);
                             console.log("Result " +result.length);
                             if (result.length) {
-                                res.json({message: "fetch data successful", status: '201', details: result});
+                                res.status(201).json({message: "fetch data successful", status: '201', details: result});
                             } else {
                                 console.log('No documents');
-                                res.json({message: "Failed to fetch data", status: '401'});
+                                res.status(201).json({message: "Failed to fetch data", status: '401'});
                             }
                         }
                     });
@@ -507,5 +525,56 @@ router.post('/hireFreelancer', function (req, res, next) {
         console.log("Could not hire " +error.toString())
     }
 });
+
+router.post('/editUpdateProfile', function (req, res, next) {
+    console.log("In Post profile");
+    var userId = req.session.userId;
+    var proffesionHeading = req.body.proffesionHeading;
+    var reqDescription = req.body.Description;
+    var reqSkills =  req.body.skills;
+    var reqPhone = req.body.phone;
+    var reqlastUpdated = new Date(Date.now()).toISOString();
+    if(req.session.userId!= null ) {
+        console.log("In connection");
+        MongoClient.connect(url, function (err, db) {
+            if (err) {
+                console.log(err.toString() + " " + url);
+            }
+            else {
+                console.log("Connection established");
+            }
+            var dbo = db.db("freelancer");
+            dbo.collection("login").updateOne(
+                {_id: ObjectId(userId)},
+                {
+                    $set: {
+                        professionalHeading: proffesionHeading,
+                        aboutUser: reqDescription,
+                        skills: reqSkills,
+                        Phone: reqPhone,
+                        lastUpdated: reqlastUpdated
+                    }
+                },
+                {upsert: true}, function (err, resultDB) {
+                    if (!err) {
+                        console.log("No error" + resultDB);
+                        res.status(201).json({message: "Profile edited successful", status: '201'});
+                    } else {
+                        console.log("Error Profile update");
+                        res.status(401).json({message: "Could not edit profile. Try again!", status: '401'});
+                    }
+
+                });
+        })
+    }
+    else{
+        res.json({message: "Session expired", status: '402'});
+    }
+
+
+
+});
+
+
 
 module.exports = router;

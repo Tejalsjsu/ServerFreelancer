@@ -5,6 +5,7 @@ var mongodb = require('mongodb');
 var MongoClient = mongodb.MongoClient;
 var url = "mongodb://localhost:27017/";
 var kafka_topic = require('../../configs/kafka_topic').kafka_topic_enums;
+var ObjectId = require('mongodb').ObjectID;
 
 
 router.post('/postproject', function (req, res, next) {
@@ -74,14 +75,14 @@ router.post('/getAllProjects', function(req, res, next) {
 
 //fetch data from consumer from backend
 router.post('/fetchAllProjects', function(req, res, next) {
-    kafka.make_request(kafka_topic.FETCH,{"fetch": "AllProjects" }, function(err,resultsKafka){
+    kafka.make_request(kafka_topic.FETCH,{"fetch": req.body.fetch, 'status': req.body.status, userId: req.session.userId }, function(err,resultsKafka){
         if(err){
             done(err,{});
-            res.status(401).json({message: "Project not posted. Try again!", status: '401'});
+            res.status(401).json({message: "Project could not be found. Try again!", status: '401'});
         }
         else {
             console.log("Success" +resultsKafka.details);
-            res.status(201).json({message: "Project not found. Try again!", status: '201', details: resultsKafka.details});
+            res.status(201).json({message: "Projects found!", status: '201', details: resultsKafka.details});
         }
     });
 });
@@ -139,7 +140,6 @@ router.post('/withdrawMoney', function (req, res, next) {
     }
 });
 
-
 router.post('/hireFreelancer', function (req, res, next) {
 
     let reqProjectId = req.body.projectId;
@@ -166,5 +166,99 @@ router.post('/hireFreelancer', function (req, res, next) {
         }
     });
 });
+
+
+router.post('/editUpdateProfile', function (req, res, next) {
+    console.log("In Post profile");
+    var userId = req.session.userId;
+    var proffesionHeading = req.body.proffesionHeading;
+    var reqDescription = req.body.Description;
+    var reqSkills =  req.body.skills;
+    var reqPhone = req.body.phone;
+    var reqlastUpdated = new Date(Date.now()).toISOString();
+    if(req.session.userId!= null ) {
+        console.log("In connection mongo db");
+        MongoClient.connect(url, function (err, db) {
+            if (err) {
+                console.log(err.toString() + " " + url);
+            }
+            else {
+                console.log("Connection established");
+            }
+            var dbo = db.db("freelancer");
+            dbo.collection("login").updateOne(
+                {_id: ObjectId(userId)},
+                {
+                    $set: {
+                        professionalHeading: proffesionHeading,
+                        aboutUser: reqDescription,
+                        skills: reqSkills,
+                        Phone: reqPhone,
+                        lastUpdated: reqlastUpdated
+                    }
+                },
+                {upsert: true}, function (err, resultDB) {
+                    if (!err) {
+                        console.log("No error" + resultDB);
+                        res.status(201).json({message: "Profile edited successful", status: '201'});
+                    } else {
+                        console.log("Error Profile update");
+                        res.status(401).json({message: "Could not edit profile. Try again!", status: '401'});
+                    }
+
+                });
+        })
+    }
+    else{
+        res.json({message: "Session expired", status: '402'});
+    }
+
+
+
+});
+
+router.post('/getUserProfile', function(req, res, next){
+    if(req.session.userId!= null ) {
+        MongoClient.connect(url, function (err, db) {
+            if (err) {
+                console.log(err.toString() + " " + url);
+            }
+            else {
+                console.log("Connection established");
+            }
+            var dbo = db.db("freelancer");
+            dbo.collection("login").findOne({id: ObjectId(req.session.userId)}, function (err, user) {
+                if (err) {
+                    throw err;
+                    res.status(401).json({message: "Could not hire. Try again!", status: '401'});
+                } else {
+                    res.status(201).json({message: "Hire successful", status: '201', details: user});
+                }
+            });
+        });
+    }
+});
+
+router.post('/signup_mongodb', function(req, res) {
+
+    var reqPassword = req.body.password;
+    var hash = bcrypt.hashSync(reqPassword, salt);
+
+    kafka.make_request(kafka_topic.USER,{"reqUsername": req.body.username, "reqPassword": hash, "topic":kafka_topic.USER, "apiCall": "signup"},
+        function(err,results){
+        if(err){
+            done(err,{});
+            res.status(401).json({message: "Could not sign up. Try again!", status: '401'});
+        } else {
+            if(results.status === 201){
+                res.status(201).json({message: "Sign up successful!!", status: '201'});
+            }
+            else {
+                console.log("Error in post "+results);
+                res.status(401).json({message: "Could not Sign up. Try again!", status: '401'});
+            }
+        }
+    });
+})
 
 module.exports = router;

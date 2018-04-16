@@ -289,7 +289,7 @@ router.post('/getUserProfile', function(req, res, next){
                     // res.send(resData);
                 }
                 else {
-                    console.log("Session Expired");
+                    console.log("Session Expired!");
                     res.status(401).json({message: "Failed to fetch data", status: '401'});
                 }
             }

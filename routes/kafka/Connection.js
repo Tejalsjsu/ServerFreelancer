@@ -1,10 +1,13 @@
-var kafka = require('kafka-node');
+let kafka = require('kafka-node');
+let kafka_topic = require('../../configs/kafka_topic').kafka_topic_enums;
 
 function ConnectionProvide(){
     this.getConsumer = function(topic_name){
         if (!this.kafkaConsumerConnection){
             this.client = new kafka.Client("localhost:2181");
-            this.kafkaConsumerConnection = new kafka.Consumer(this.client, [{topic: topic_name, partition: 0 }]);
+            this.kafkaConsumerConnection = new kafka.Consumer(this.client,
+                { topic: kafka_topic.RESPONSE, partition: 0 }
+            );
             this.client.on('ready', function() {
                 console.log('Client is ready')
             })
